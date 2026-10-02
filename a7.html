@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#11151b">
+    <title>霓虹彈珠｜3D 打磚塊</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { color-scheme: dark; --ink: #f6f4ec; --muted: #9b9f9c; --lime: #d9ff42; --pink: #ff4c9b; --cyan: #55e8ec; --line: #ffffff26; }
+        * { box-sizing: border-box; }
+        body { min-width: 320px; min-height: 100vh; margin: 0; overflow: hidden; color: var(--ink); background: #11151b; font-family: "Noto Sans TC", sans-serif; }
+        .app { position: relative; display: flex; min-height: 100svh; flex-direction: column; isolation: isolate; overflow: hidden; background: radial-gradient(ellipse at 50% 72%, #26343b 0%, #171d22 38%, transparent 72%), linear-gradient(135deg, #171a20 0%, #101419 58%, #19131b 100%); }
+        .app::before { position: absolute; z-index: -1; inset: 0; background-image: radial-gradient(#ffffff14 .7px, transparent .7px); background-size: 6px 6px; content: ""; opacity: .23; pointer-events: none; }
+        .topbar { z-index: 2; display: flex; min-height: 76px; align-items: center; justify-content: space-between; gap: 20px; padding: 14px clamp(18px, 5vw, 72px); border-bottom: 1px solid var(--line); background: #11151bcc; backdrop-filter: blur(14px); }
+        .brand { display: flex; align-items: center; gap: 13px; }
+        .brand-mark { display: grid; width: 36px; aspect-ratio: 1; place-items: center; color: #171a13; background: var(--lime); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); font: 900 20px/1 "Barlow Condensed", sans-serif; }
+        .brand-copy { display: grid; gap: 1px; }
+        .brand-name { font: 800 21px/1 "Barlow Condensed", sans-serif; letter-spacing: .06em; }
+        .brand-kicker { color: var(--muted); font-size: 10px; letter-spacing: .18em; }
+        .top-right { display: flex; align-items: center; gap: clamp(14px, 3vw, 34px); }
+        .status { display: flex; align-items: center; gap: 8px; color: #c5c8c3; font-size: 12px; }
+        .status-dot { width: 7px; aspect-ratio: 1; border-radius: 50%; background: var(--lime); box-shadow: 0 0 12px var(--lime); }
+        .icon-button { display: grid; width: 40px; aspect-ratio: 1; place-items: center; border: 1px solid #ffffff32; border-radius: 50%; color: var(--ink); background: #ffffff08; cursor: pointer; transition: border-color .2s, color .2s, background .2s; }
+        .icon-button:hover { border-color: var(--lime); color: var(--lime); background: #d9ff4210; }
+        .icon-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+        .play-area { position: relative; display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(150px, .7fr) minmax(0, 2fr) minmax(150px, .7fr); align-items: stretch; padding: 0 clamp(18px, 5vw, 72px); }
+        .side-info { z-index: 1; display: flex; flex-direction: column; justify-content: center; gap: 38px; padding: 26px 0; }
+        .eyebrow { margin: 0 0 8px; color: var(--muted); font: 600 11px/1.2 "Barlow Condensed", sans-serif; letter-spacing: .2em; text-transform: uppercase; }
+        .score-value { color: var(--lime); font: 800 clamp(36px, 5vw, 58px)/.95 "Barlow Condensed", sans-serif; font-variant-numeric: tabular-nums; }
+        .lives { display: flex; gap: 7px; }
+        .life { width: 13px; height: 13px; background: var(--pink); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); filter: drop-shadow(0 0 5px #ff4c9b80); }
+        .life.lost { background: #555a5d; filter: none; }
+        .level-value { color: var(--cyan); font: 700 27px/1 "Barlow Condensed", sans-serif; }
+        .board-wrap { position: relative; min-width: 0; min-height: 450px; }
+        #scene { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; touch-action: none; }
+        #scene canvas { display: block; width: 100%; height: 100%; }
+        .board-caption { position: absolute; right: 4px; bottom: 20px; left: 4px; display: flex; justify-content: space-between; color: #b7b9b3; font: 600 11px/1 "Barlow Condensed", sans-serif; letter-spacing: .17em; pointer-events: none; }
+        .board-caption span:last-child { color: var(--lime); }
+        .overlay { position: absolute; z-index: 1; inset: 0; display: grid; align-content: center; justify-items: center; gap: 12px; padding: 30px; text-align: center; pointer-events: none; transition: opacity .25s, visibility .25s; }
+        .overlay.hidden { visibility: hidden; opacity: 0; }
+        .overlay::before { position: absolute; inset: 15% 8%; z-index: -1; background: radial-gradient(ellipse, #11151bdc 0%, #11151b8a 52%, transparent 75%); content: ""; }
+        .overline { margin: 0; color: var(--lime); font: 700 12px/1 "Barlow Condensed", sans-serif; letter-spacing: .25em; }
+        .overlay h1 { margin: 0; font: 900 clamp(39px, 7vw, 76px)/.95 "Barlow Condensed", sans-serif; letter-spacing: .025em; text-shadow: 0 4px 0 #000, 0 0 32px #ff4c9b55; }
+        .overlay p { max-width: 350px; margin: 2px 0 6px; color: #d1d1cb; font-size: 13px; line-height: 1.8; }
+        .start-button { min-width: 170px; padding: 13px 24px; border: 0; color: #131710; background: var(--lime); font: 800 16px/1 "Barlow Condensed", sans-serif; letter-spacing: .08em; cursor: pointer; pointer-events: auto; transform: skewX(-7deg); box-shadow: 0 7px 0 #8fa928, 0 0 32px #d9ff4233; transition: transform .15s, box-shadow .15s; }
+        .start-button:hover { transform: skewX(-7deg) translateY(-2px); box-shadow: 0 9px 0 #8fa928, 0 0 38px #d9ff4266; }
+        .start-button:active { transform: skewX(-7deg) translateY(4px); box-shadow: 0 3px 0 #8fa928; }
+        .footer { z-index: 2; display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 14px; padding: 10px clamp(18px, 5vw, 72px); border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+        .key-hints { display: flex; align-items: center; gap: 8px; }
+        kbd { display: inline-grid; min-width: 25px; height: 23px; place-items: center; padding: 0 5px; border: 1px solid #ffffff38; border-radius: 3px; color: #e5e5dc; background: #ffffff0b; font: 600 11px "Barlow Condensed", sans-serif; }
+        .footer-note { color: #c9cbc5; }
+        @media (max-width: 700px) {
+            body { overflow: auto; }
+            .app { min-height: 100svh; }
+            .topbar { min-height: 66px; padding-right: 18px; padding-left: 18px; }
+            .play-area { min-height: 0; flex: 1; grid-template-columns: 1fr; grid-template-rows: auto minmax(340px, 1fr); padding: 0 18px; }
+            .side-info { display: grid; grid-row: 1; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 16px 0 0; }
+            .side-info section:nth-child(2) { justify-self: center; }
+            .side-info section:nth-child(3) { justify-self: end; }
+            .eyebrow { margin-bottom: 5px; font-size: 10px; }
+            .score-value { font-size: 35px; }
+            .level-value { font-size: 24px; }
+            .life { width: 11px; height: 11px; }
+            .board-wrap { grid-row: 2; min-height: 340px; }
+            .footer { min-height: 48px; padding: 8px 18px; font-size: 10px; }
+            .key-hints { gap: 5px; }
+            kbd { min-width: 21px; height: 20px; }
+        }
+        @media (max-width: 390px) { .status { font-size: 10px; } .footer-note { display: none; } .play-area { grid-template-rows: auto minmax(320px, 1fr); } .board-wrap { min-height: 320px; } }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+    </style>
+    <script type="importmap">
+        {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}
+    </script>
+</head>
+<body>
+    <main class="app">
+        <header class="topbar">
+            <div class="brand"><span class="brand-mark" aria-hidden="true">✦</span><div class="brand-copy"><span class="brand-name">NEON BREAKER</span><span class="brand-kicker">ARCADE / 01</span></div></div>
+            <div class="top-right"><span class="status"><span class="status-dot" aria-hidden="true"></span><span id="status">等待開球</span></span><button class="icon-button" id="sound" type="button" aria-label="關閉音效" title="音效開關"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button></div>
+        </header>
+        <section class="play-area" aria-label="打磚塊遊戲">
+            <aside class="side-info" aria-label="遊戲資訊">
+                <section><p class="eyebrow">分數 / SCORE</p><div class="score-value" id="score">00000</div></section>
+                <section><p class="eyebrow">剩餘球數 / BALLS</p><div class="lives" id="lives" aria-label="3 顆球"><span class="life"></span><span class="life"></span><span class="life"></span></div></section>
+                <section><p class="eyebrow">關卡 / STAGE</p><div class="level-value" id="level">01</div></section>
+            </aside>
+            <div class="board-wrap">
+                <div id="scene" role="img" aria-label="3D 霓虹打磚塊遊戲畫面"></div>
+                <div class="overlay" id="overlay"><p class="overline">READY PLAYER ONE</p><h1 id="title">打破霓虹<br>的夜晚</h1><p id="instructions">讓彈珠留在場上，把所有磚塊打碎。<br>移動滑鼠或使用方向鍵控制擋板。</p><button class="start-button" id="start" type="button">開始遊戲　↗</button></div>
+                <div class="board-caption" aria-hidden="true"><span>◇ BREAK THE PATTERN ◇</span><span>BEST <b id="best">00000</b></span></div>
+            </div>
+            <div aria-hidden="true"></div>
+        </section>
+        <footer class="footer"><div class="key-hints"><span>移動</span><kbd>←</kbd><kbd>→</kbd><span>或</span><kbd>A</kbd><kbd>D</kbd><span>發球</span><kbd>SPACE</kbd></div><span class="footer-note">滑鼠／觸控也能控制擋板</span></footer>
+    </main>
+    <script type="module">
+        import * as THREE from 'three';
+
+        const host = document.getElementById('scene');
+        const scoreLabel = document.getElementById('score');
+        const bestLabel = document.getElementById('best');
+        const livesLabel = document.getElementById('lives');
+        const levelLabel = document.getElementById('level');
+        const statusLabel = document.getElementById('status');
+        const overlay = document.getElementById('overlay');
+        const titleLabel = document.getElementById('title');
+        const instructions = document.getElementById('instructions');
+        const startButton = document.getElementById('start');
+        const soundButton = document.getElementById('sound');
+        const keys = new Set();
+        const board = { width: 11, depth: 15, paddleZ: 5.65, ballRadius: .19 };
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.3;
+        host.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x151a20, .035);
+        const camera = new THREE.PerspectiveCamera(37, 1, .1, 80);
+        camera.position.set(0, 13.8, 18.8);
+        camera.lookAt(0, 0, -.3);
+        scene.add(new THREE.HemisphereLight(0xdafcff, 0x27202a, 2.1));
+        const keyLight = new THREE.DirectionalLight(0xfff4d8, 3.3);
+        keyLight.position.set(-4, 12, 7);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.set(1024, 1024);
+        scene.add(keyLight);
+        const pinkLight = new THREE.PointLight(0xff2e8a, 30, 15);
+        pinkLight.position.set(-4, 2, -3);
+        scene.add(pinkLight);
+        const cyanLight = new THREE.PointLight(0x22ddeb, 28, 15);
+        cyanLight.position.set(4, 2, 1);
+        scene.add(cyanLight);
+
+        const ground = new THREE.Mesh(new THREE.BoxGeometry(board.width, .28, board.depth), new THREE.MeshStandardMaterial({ color: 0x20282b, metalness: .62, roughness: .4 }));
+        ground.position.y = -.32;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        const grid = new THREE.GridHelper(board.width, 22, 0x56e8e2, 0x59666a);
+        grid.position.y = -.165;
+        grid.material.transparent = true;
+        grid.material.opacity = .22;
+        scene.add(grid);
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x51e5dc, emissive: 0x137775, emissiveIntensity: 1.25, metalness: .5, roughness: .28 });
+        for (const x of [-board.width / 2, board.width / 2]) {
+            const wall = new THREE.Mesh(new THREE.BoxGeometry(.14, .34, board.depth), wallMaterial);
+            wall.position.set(x, -.02, 0);
+            wall.receiveShadow = true;
+            scene.add(wall);
+        }
+        const backWall = new THREE.Mesh(new THREE.BoxGeometry(board.width, .34, .14), wallMaterial);
+        backWall.position.set(0, -.02, -board.depth / 2);
+        scene.add(backWall);
+        const paddle = new THREE.Mesh(new THREE.BoxGeometry(1.85, .3, .52), new THREE.MeshStandardMaterial({ color: 0xd9ff42, emissive: 0x86ad17, emissiveIntensity: 1.1, metalness: .35, roughness: .26 }));
+        paddle.position.set(0, .18, board.paddleZ);
+        paddle.castShadow = true;
+        paddle.receiveShadow = true;
+        scene.add(paddle);
+        const paddleGlow = new THREE.PointLight(0xd9ff42, 5, 3.5);
+        paddleGlow.position.set(0, .4, board.paddleZ);
+        scene.add(paddleGlow);
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(board.ballRadius, 24, 16), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x57edf1, emissiveIntensity: 2.4, metalness: .18, roughness: .18 }));
+        ball.castShadow = true;
+        scene.add(ball);
+        const ballLight = new THREE.PointLight(0x53f4ef, 7, 4);
+        scene.add(ballLight);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(.31, .025, 8, 32), new THREE.MeshBasicMaterial({ color: 0xff4c9b, transparent: true, opacity: .85 }));
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = -.15;
+        scene.add(ring);
+
+        const brickColors = [0xff4c9b, 0xff8056, 0xffd64f, 0xd9ff42, 0x55e8ec, 0x5c91ff];
+        const bricks = [];
+        const brickGeometry = new THREE.BoxGeometry(1.47, .48, .64);
+        function addBricks() {
+            bricks.forEach(brick => scene.remove(brick.mesh));
+            bricks.length = 0;
+            for (let row = 0; row < 5; row++) {
+                for (let column = 0; column < 6; column++) {
+                    const color = brickColors[(row + column) % brickColors.length];
+                    const mesh = new THREE.Mesh(brickGeometry, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: .48, metalness: .2, roughness: .3 }));
+                    mesh.position.set((column - 2.5) * 1.68, .25, -5.7 + row * .88);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    scene.add(mesh);
+                    bricks.push({ mesh, color: new THREE.Color(color), alive: true });
+                }
+            }
+        }
+
+        let score = 0;
+        let best = Number(localStorage.getItem('neon-breaker-best') || 0);
+        let lives = 3;
+        let level = 1;
+        let running = false;
+        let gameOver = false;
+        let soundOn = true;
+        let audio;
+        let ballVelocity = new THREE.Vector2(0, 0);
+        let pointerX = null;
+        let lastTime = 0;
+        let particles = [];
+        bestLabel.textContent = String(best).padStart(5, '0');
+
+        function resize() {
+            const rect = host.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            renderer.setSize(rect.width, rect.height, false);
+            camera.aspect = rect.width / rect.height;
+            camera.updateProjectionMatrix();
+        }
+        function tone(frequency, duration = .08, type = 'sine') {
+            if (!soundOn) return;
+            try {
+                audio ||= new (window.AudioContext || window.webkitAudioContext)();
+                if (audio.state === 'suspended') audio.resume();
+                const oscillator = audio.createOscillator();
+                const gain = audio.createGain();
+                oscillator.type = type;
+                oscillator.frequency.setValueAtTime(frequency, audio.currentTime);
+                gain.gain.setValueAtTime(.055, audio.currentTime);
+                gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration);
+                oscillator.connect(gain);
+                gain.connect(audio.destination);
+                oscillator.start();
+                oscillator.stop(audio.currentTime + duration);
+            } catch (_) { /* 音效無法使用時仍可遊玩 */ }
+        }
+        function updateHud() {
+            scoreLabel.textContent = String(score).padStart(5, '0');
+            livesLabel.setAttribute('aria-label', `${lives} 顆球`);
+            [...livesLabel.children].forEach((life, index) => life.classList.toggle('lost', index >= lives));
+            levelLabel.textContent = String(level).padStart(2, '0');
+            bestLabel.textContent = String(best).padStart(5, '0');
+        }
+        function placeBall() {
+            ball.position.set(paddle.position.x, .48, board.paddleZ - .48);
+            ballLight.position.copy(ball.position);
+        }
+        function showOverlay(title, copy, buttonText, overline = 'READY PLAYER ONE') {
+            titleLabel.innerHTML = title;
+            instructions.innerHTML = copy;
+            startButton.textContent = buttonText;
+            overlay.querySelector('.overline').textContent = overline;
+            overlay.classList.remove('hidden');
+        }
+        function resetGame() {
+            score = 0;
+            lives = 3;
+            level = 1;
+            gameOver = false;
+            paddle.position.x = 0;
+            ballVelocity.set(0, 0);
+            particles.forEach(item => scene.remove(item.mesh));
+            particles = [];
+            addBricks();
+            placeBall();
+            updateHud();
+            statusLabel.textContent = '等待開球';
+        }
+        function launch() {
+            audio ||= new (window.AudioContext || window.webkitAudioContext)();
+            if (audio.state === 'suspended') audio.resume();
+            running = true;
+            gameOver = false;
+            overlay.classList.add('hidden');
+            statusLabel.textContent = '遊戲進行中';
+            ballVelocity.set((Math.random() < .5 ? -1 : 1) * 3.1, -8.4);
+            tone(520, .12);
+            lastTime = performance.now();
+        }
+        function endGame() {
+            running = false;
+            gameOver = true;
+            statusLabel.textContent = '遊戲結束';
+            if (score > best) {
+                best = score;
+                localStorage.setItem('neon-breaker-best', best);
+                updateHud();
+            }
+            showOverlay('再來一局<br>更高分！', `本局分數：<strong>${String(score).padStart(5, '0')}</strong><br>磚塊還在等你。`, '再玩一次　↗', 'GAME OVER');
+            tone(155, .35, 'sawtooth');
+        }
+        function burst(position, color) {
+            for (let index = 0; index < 7; index++) {
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(.07, .07, .07), new THREE.MeshBasicMaterial({ color, transparent: true }));
+                mesh.position.copy(position);
+                scene.add(mesh);
+                particles.push({ mesh, velocity: new THREE.Vector3((Math.random() - .5) * 4, Math.random() * 2, (Math.random() - .5) * 4), life: .42 });
+            }
+        }
+        function advanceLevel() {
+            level++;
+            ballVelocity.multiplyScalar(1.08);
+            addBricks();
+            updateHud();
+            statusLabel.textContent = `第 ${level} 關`;
+            tone(760, .2, 'triangle');
+        }
+        function update(dt) {
+            const limit = board.width / 2 - .96;
+            if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) paddle.position.x -= 8.5 * dt;
+            if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) paddle.position.x += 8.5 * dt;
+            if (pointerX !== null) paddle.position.x += (pointerX - paddle.position.x) * Math.min(1, dt * 14);
+            paddle.position.x = THREE.MathUtils.clamp(paddle.position.x, -limit, limit);
+            paddleGlow.position.x = paddle.position.x;
+            ring.position.x = paddle.position.x;
+            if (!running) {
+                placeBall();
+            } else {
+                ball.position.x += ballVelocity.x * dt;
+                ball.position.z += ballVelocity.y * dt;
+                if (ball.position.x < -limit || ball.position.x > limit) {
+                    ball.position.x = THREE.MathUtils.clamp(ball.position.x, -limit, limit);
+                    ballVelocity.x *= -1;
+                    tone(350, .04);
+                }
+                if (ball.position.z < -board.depth / 2 + .35) {
+                    ball.position.z = -board.depth / 2 + .35;
+                    ballVelocity.y = Math.abs(ballVelocity.y);
+                    tone(330, .04);
+                }
+                if (ballVelocity.y > 0 && ball.position.z + board.ballRadius > board.paddleZ - .16 && ball.position.z < board.paddleZ + .24 && Math.abs(ball.position.x - paddle.position.x) < .99) {
+                    const offset = (ball.position.x - paddle.position.x) / .99;
+                    ball.position.z = board.paddleZ - .17;
+                    ballVelocity.set(offset * 6.2, -Math.sqrt(Math.max(32, ballVelocity.lengthSq() - offset * offset * 38)));
+                    tone(540 + Math.abs(offset) * 260, .075, 'triangle');
+                }
+                if (ball.position.z > board.paddleZ + .8) {
+                    lives--;
+                    updateHud();
+                    tone(145, .2, 'sawtooth');
+                    if (lives <= 0) { endGame(); return; }
+                    ballVelocity.set(0, 0);
+                    running = false;
+                    statusLabel.textContent = '按空白鍵繼續';
+                    showOverlay('接住下一球', `還剩 <strong>${lives}</strong> 顆球。`, '繼續遊戲　↗', '球掉出去囉');
+                }
+                for (const brick of bricks) {
+                    if (!brick.alive) continue;
+                    const dx = Math.abs(ball.position.x - brick.mesh.position.x);
+                    const dz = Math.abs(ball.position.z - brick.mesh.position.z);
+                    if (dx < .83 && dz < .43) {
+                        brick.alive = false;
+                        brick.mesh.visible = false;
+                        ballVelocity.y *= -1;
+                        score += 10;
+                        if (score > best) best = score;
+                        updateHud();
+                        burst(brick.mesh.position.clone(), brick.color);
+                        tone(430 + (score % 5) * 75, .09, 'square');
+                        if (bricks.every(item => !item.alive)) advanceLevel();
+                        break;
+                    }
+                }
+                ball.rotation.x += ballVelocity.y * dt * 1.8;
+                ball.rotation.z -= ballVelocity.x * dt * 1.8;
+                ballLight.position.copy(ball.position);
+            }
+            particles = particles.filter(item => {
+                item.life -= dt;
+                item.mesh.position.addScaledVector(item.velocity, dt);
+                item.mesh.material.opacity = Math.max(0, item.life / .42);
+                if (item.life <= 0) scene.remove(item.mesh);
+                return item.life > 0;
+            });
+            ring.material.opacity = .48 + Math.sin(performance.now() * .006) * .24;
+        }
+        function frame(now) {
+            requestAnimationFrame(frame);
+            const dt = Math.min((now - lastTime) / 1000 || 0, .032);
+            lastTime = now;
+            update(dt);
+            renderer.render(scene, camera);
+        }
+        function setPointer(event) {
+            const rect = host.getBoundingClientRect();
+            const normalizedX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            const viewWidth = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.abs(camera.position.z);
+            pointerX = THREE.MathUtils.clamp(normalizedX * viewWidth / 2, -board.width / 2 + 1, board.width / 2 - 1);
+        }
+        host.addEventListener('pointermove', setPointer);
+        host.addEventListener('pointerdown', event => {
+            setPointer(event);
+            if (!running && overlay.classList.contains('hidden')) launch();
+        });
+        window.addEventListener('keydown', event => {
+            if (['ArrowLeft', 'ArrowRight', ' '].includes(event.key)) event.preventDefault();
+            keys.add(event.key);
+            if (event.key === ' ' && !running) {
+                if (gameOver) resetGame();
+                launch();
+            }
+        });
+        window.addEventListener('keyup', event => keys.delete(event.key));
+        startButton.addEventListener('click', () => {
+            if (gameOver) resetGame();
+            launch();
+        });
+        soundButton.addEventListener('click', () => {
+            soundOn = !soundOn;
+            soundButton.setAttribute('aria-label', soundOn ? '關閉音效' : '開啟音效');
+            soundButton.innerHTML = soundOn
+                ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>'
+                : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6m0-6-5 6"/></svg>';
+            if (soundOn) tone(620, .08);
+        });
+        new ResizeObserver(resize).observe(host);
+        window.addEventListener('resize', resize);
+        resetGame();
+        resize();
+        requestAnimationFrame(frame);
+    </script>
+</body>
+</html>

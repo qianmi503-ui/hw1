@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星際守衛｜太空射擊</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; display: grid; place-items: center;
+            overflow: hidden; color: #eaf7ff; font-family: system-ui, "Microsoft JhengHei", sans-serif;
+            background: radial-gradient(ellipse at 50% 110%, #15245c 0%, #080d27 46%, #030611 100%);
+        }
+        .game { width: min(94vw, 520px); text-align: center; }
+        h1 { margin: 0 0 12px; font-size: clamp(1.35rem, 5vw, 2rem); letter-spacing: .14em; text-shadow: 0 0 18px #36d9ff; }
+        .hud { display: flex; justify-content: space-between; align-items: center; margin: 0 4px 10px; color: #a9c9ed; font-size: .95rem; }
+        .hud strong { color: #fff; }
+        .sound { border: 1px solid #425c91; border-radius: 999px; padding: 6px 12px; color: #dff7ff; background: #101a3c; cursor: pointer; }
+        .stage { position: relative; border: 1px solid #4a71b2; border-radius: 14px; overflow: hidden; box-shadow: 0 0 34px #1260b766, inset 0 0 22px #1260b733; background: #05091b; }
+        canvas { display: block; width: 100%; height: min(70vh, 650px); min-height: 390px; touch-action: none; }
+        .overlay { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; padding: 24px; background: #030817b8; }
+        .overlay.hidden { display: none; }
+        .overlay h2 { margin: 0; font-size: 1.8rem; }
+        .overlay p { margin: 0; color: #c1d7f5; line-height: 1.7; }
+        .start { justify-self: center; border: 0; border-radius: 999px; padding: 11px 28px; color: #04101e; font-weight: 800; font-size: 1rem; background: linear-gradient(90deg, #51f0dc, #6bbcff); cursor: pointer; box-shadow: 0 0 20px #36d9ff88; }
+        .hint { margin: 10px 0 0; color: #8da8cc; font-size: .82rem; }
+        @media (max-width: 420px) { canvas { min-height: 360px; } }
+    </style>
+</head>
+<body>
+    <main class="game">
+        <h1>✦ 星際守衛 ✦</h1>
+        <div class="hud"><span>分數 <strong id="score">0</strong></span><span>生命 <strong id="lives">3</strong></span><button class="sound" id="sound" type="button">🔊 音效開</button></div>
+        <div class="stage">
+            <canvas id="game" aria-label="太空射擊遊戲畫面"></canvas>
+            <section class="overlay" id="overlay">
+                <h2 id="message">準備出擊！</h2>
+                <p id="instructions">擊落隕石，保護你的太空船。<br>使用 ← → 或 A / D 移動，空白鍵射擊。</p>
+                <button class="start" id="start" type="button">開始遊戲</button>
+            </section>
+        </div>
+        <p class="hint">手機：在畫面上左右滑動移動，點擊射擊</p>
+    </main>
+    <script>
+        (() => {
+            const canvas = document.getElementById('game');
+            const ctx = canvas.getContext('2d');
+            const scoreLabel = document.getElementById('score');
+            const livesLabel = document.getElementById('lives');
+            const overlay = document.getElementById('overlay');
+            const message = document.getElementById('message');
+            const instructions = document.getElementById('instructions');
+            const startButton = document.getElementById('start');
+            const soundButton = document.getElementById('sound');
+            const keys = new Set();
+            let width = 480, height = 620, player, bullets, rocks, stars, score = 0, lives = 3;
+            let running = false, soundOn = true, lastShot = 0, spawnTimer = 0, lastTime = 0, audio;
+
+            function resize() {
+                const rect = canvas.getBoundingClientRect();
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                width = rect.width; height = rect.height;
+                canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                if (player) player.x = Math.max(18, Math.min(width - 18, player.x));
+                if (!stars.length) stars = Array.from({ length: 85 }, () => ({ x: Math.random() * width, y: Math.random() * height, s: Math.random() * 1.8 + .4, v: Math.random() * 35 + 15 }));
+            }
+            function beep(freq, duration, type = 'sine', volume = .045) {
+                if (!soundOn) return;
+                try {
+                    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+                    if (audio.state === 'suspended') audio.resume();
+                    const osc = audio.createOscillator(), gain = audio.createGain();
+                    osc.type = type; osc.frequency.setValueAtTime(freq, audio.currentTime);
+                    gain.gain.setValueAtTime(volume, audio.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration);
+                    osc.connect(gain); gain.connect(audio.destination); osc.start(); osc.stop(audio.currentTime + duration);
+                } catch (_) { /* 音效不可用時仍可遊玩 */ }
+            }
+            function reset() {
+                score = 0; lives = 3; bullets = []; rocks = []; spawnTimer = 0; lastShot = 0;
+                player = { x: width / 2, y: height - 54, r: 15, speed: 300, invincible: 0 };
+                scoreLabel.textContent = score; livesLabel.textContent = lives;
+            }
+            function begin() {
+                if (!player || !running) reset();
+                running = true; overlay.classList.add('hidden'); lastTime = performance.now(); requestAnimationFrame(loop);
+            }
+            function endGame() {
+                running = false; message.textContent = '任務結束';
+                instructions.innerHTML = `最終分數：<strong>${score}</strong><br>準備好再挑戰一次！`;
+                startButton.textContent = '再玩一次'; overlay.classList.remove('hidden'); beep(150, .35, 'sawtooth', .07);
+            }
+            function shoot(now) {
+                if (now - lastShot < 220) return;
+                bullets.push({ x: player.x, y: player.y - 18, r: 3, v: 470 });
+                lastShot = now; beep(680, .07, 'square', .018);
+            }
+            function spawnRock() {
+                const r = 13 + Math.random() * 17;
+                rocks.push({ x: r + Math.random() * (width - r * 2), y: -r, r, v: 85 + Math.random() * 90 + score * .12, spin: Math.random() * 6, rot: (Math.random() - .5) * 2 });
+            }
+            function update(dt, now) {
+                stars.forEach(s => { s.y += s.v * dt; if (s.y > height) { s.y = 0; s.x = Math.random() * width; } });
+                const left = keys.has('ArrowLeft') || keys.has('a') || keys.has('A');
+                const right = keys.has('ArrowRight') || keys.has('d') || keys.has('D');
+                if (left) player.x -= player.speed * dt;
+                if (right) player.x += player.speed * dt;
+                player.x = Math.max(18, Math.min(width - 18, player.x));
+                if (keys.has(' ') || pointerDown) shoot(now);
+                player.invincible = Math.max(0, player.invincible - dt);
+                bullets.forEach(b => b.y -= b.v * dt); bullets = bullets.filter(b => b.y > -10);
+                spawnTimer += dt;
+                if (spawnTimer > Math.max(.32, .9 - score * .002)) { spawnRock(); spawnTimer = 0; }
+                rocks.forEach(r => { r.y += r.v * dt; r.spin += r.rot * dt; });
+                for (let i = rocks.length - 1; i >= 0; i--) {
+                    const rock = rocks[i]; let hit = false;
+                    for (let j = bullets.length - 1; j >= 0; j--) {
+                        const b = bullets[j];
+                        if (Math.hypot(rock.x - b.x, rock.y - b.y) < rock.r + b.r) {
+                            rocks.splice(i, 1); bullets.splice(j, 1); score += 10; scoreLabel.textContent = score;
+                            beep(240, .12, 'triangle', .05); hit = true; break;
+                        }
+                    }
+                    if (hit) continue;
+                    if (player.invincible <= 0 && Math.hypot(rock.x - player.x, rock.y - player.y) < rock.r + player.r * .7) {
+                        rocks.splice(i, 1); lives--; livesLabel.textContent = lives; player.invincible = 1.2;
+                        beep(110, .25, 'sawtooth', .07); if (lives <= 0) { endGame(); return; }
+                    } else if (rock.y - rock.r > height) rocks.splice(i, 1);
+                }
+            }
+            function drawShip() {
+                if (player.invincible > 0 && Math.floor(player.invincible * 12) % 2) return;
+                ctx.save(); ctx.translate(player.x, player.y);
+                ctx.fillStyle = '#ff9d52'; ctx.beginPath(); ctx.moveTo(-6, 12); ctx.lineTo(0, 24 + Math.random() * 6); ctx.lineTo(6, 12); ctx.fill();
+                ctx.shadowBlur = 15; ctx.shadowColor = '#42dcff'; ctx.fillStyle = '#a8f4ff'; ctx.strokeStyle = '#31bfff'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, -19); ctx.lineTo(14, 14); ctx.lineTo(0, 8); ctx.lineTo(-14, 14); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#508cff'; ctx.beginPath(); ctx.ellipse(0, -3, 4, 7, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            }
+            function draw() {
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = '#05091b'; ctx.fillRect(0, 0, width, height);
+                stars.forEach(s => { ctx.globalAlpha = .45 + s.s / 3; ctx.fillStyle = '#c8e7ff'; ctx.fillRect(s.x, s.y, s.s, s.s); }); ctx.globalAlpha = 1;
+                bullets.forEach(b => { ctx.shadowBlur = 12; ctx.shadowColor = '#67f5ff'; ctx.fillStyle = '#b4ffff'; ctx.fillRect(b.x - 2, b.y - 7, 4, 13); }); ctx.shadowBlur = 0;
+                rocks.forEach(r => {
+                    ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.spin); ctx.fillStyle = '#8a6580'; ctx.strokeStyle = '#f0a477'; ctx.lineWidth = 2;
+                    ctx.beginPath(); for (let i = 0; i < 9; i++) { const a = i * Math.PI * 2 / 9, rad = r.r * (.78 + .22 * Math.sin(i * 7 + r.r)); i ? ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad) : ctx.moveTo(Math.cos(a) * rad, Math.sin(a) * rad); } ctx.closePath(); ctx.fill(); ctx.stroke();
+                    ctx.fillStyle = '#604963'; ctx.beginPath(); ctx.arc(-r.r * .25, -r.r * .12, r.r * .18, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+                });
+                if (player) drawShip();
+            }
+            function loop(now) {
+                if (!running) return;
+                const dt = Math.min((now - lastTime) / 1000, .04); lastTime = now;
+                update(dt, now); draw(); if (running) requestAnimationFrame(loop);
+            }
+            let pointerDown = false;
+            canvas.addEventListener('pointerdown', e => { pointerDown = true; const rect = canvas.getBoundingClientRect(); player.x = e.clientX - rect.left; if (!running) begin(); shoot(performance.now()); });
+            canvas.addEventListener('pointermove', e => { if (pointerDown && player) { const rect = canvas.getBoundingClientRect(); player.x = e.clientX - rect.left; } });
+            window.addEventListener('pointerup', () => { pointerDown = false; });
+            window.addEventListener('keydown', e => { if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault(); keys.add(e.key); if (e.key === ' ' && !running) begin(); });
+            window.addEventListener('keyup', e => keys.delete(e.key));
+            startButton.addEventListener('click', begin);
+            soundButton.addEventListener('click', () => { soundOn = !soundOn; soundButton.textContent = soundOn ? '🔊 音效開' : '🔇 音效關'; if (soundOn) beep(520, .1); });
+            window.addEventListener('resize', resize); resize(); reset(); draw();
+        })();
+    </script>
+</body>
+</html>
